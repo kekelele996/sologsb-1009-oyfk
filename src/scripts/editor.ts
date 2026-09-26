@@ -3,6 +3,7 @@ import "@shoelace-style/shoelace/dist/shoelace.js";
 type BlockType = "heading" | "paragraph" | "image" | "link";
 type ReviewStatus = "pending" | "approved" | "needs-work";
 type Severity = "error" | "warning" | "info";
+type CommentRole = "reviewer" | "editor";
 
 interface CommentReply {
   id: string;
@@ -11,13 +12,29 @@ interface CommentReply {
   createdAt: string;
 }
 
+/** 记录“是哪条意见把已通过内容退回待审核”以及当时的通过依据 */
+interface ReturnTrace {
+  at: string;
+  fromApprover: string;
+  approvalBasis: string;
+}
+
 interface CommentItem {
   id: string;
   author: string;
+  role: CommentRole;
   body: string;
   createdAt: string;
   resolved: boolean;
   replies: CommentReply[];
+  triggeredReturn: ReturnTrace | null;
+}
+
+/** 通过依据：审核人确认通过时填写，随版本快照一并保存 */
+interface ApprovalRecord {
+  basis: string;
+  approvedBy: string;
+  approvedAt: string;
 }
 
 interface ContentBlock {
@@ -32,6 +49,7 @@ interface ContentBlock {
   changeReason: string;
   reviewStatus: ReviewStatus;
   comments: CommentItem[];
+  approval: ApprovalRecord | null;
 }
 
 interface GlossaryTerm {
@@ -74,6 +92,7 @@ const STORAGE_KEY = "sologsb-1009-accessible-textbook-v1";
 const uid = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
 function createSeedProject(): ChapterProject {
+  const isoMinutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
   const blocks: ContentBlock[] = [
     {
       id: "block-h1",
@@ -84,6 +103,7 @@ function createSeedProject(): ChapterProject {
       changeReason: "",
       reviewStatus: "approved",
       comments: [],
+      approval: { basis: "章节标题与纸质教材一致，层级 H1 正确。", approvedBy: "审核人 王老师", approvedAt: isoMinutesAgo(60) },
     },
     {
       id: "block-p1",
@@ -92,7 +112,23 @@ function createSeedProject(): ChapterProject {
       accessibleText: "城市里的水会不断循环。它经过蒸发、降水并沿地面流动。了解这些过程，可以帮助我们建设更能适应变化的城市。",
       changeReason: "拆分长句，把抽象表述改为更直接的说明。",
       reviewStatus: "pending",
-      comments: [],
+      comments: [
+        {
+          id: "comment-seed-return",
+          author: "审核专家 李老师",
+          role: "reviewer",
+          body: "“沿地面流动”建议补一句就是原来的“地表径流”，否则学生后面看到术语对不上。",
+          createdAt: isoMinutesAgo(20),
+          resolved: false,
+          replies: [],
+          triggeredReturn: {
+            at: isoMinutesAgo(20),
+            fromApprover: "审核人 王老师",
+            approvalBasis: "三个短句语义完整，已替换“地表径流”为通俗表达。",
+          },
+        },
+      ],
+      approval: null,
     },
     {
       id: "block-h2",
@@ -103,6 +139,7 @@ function createSeedProject(): ChapterProject {
       changeReason: "保留原章节结构。",
       reviewStatus: "approved",
       comments: [],
+      approval: { basis: "H2 紧接 H1，层级无跳跃，表述保留原意。", approvedBy: "审核人 王老师", approvedAt: isoMinutesAgo(55) },
     },
     {
       id: "block-img",
@@ -114,6 +151,7 @@ function createSeedProject(): ChapterProject {
       changeReason: "",
       reviewStatus: "needs-work",
       comments: [],
+      approval: null,
     },
     {
       id: "block-p2",
@@ -123,6 +161,7 @@ function createSeedProject(): ChapterProject {
       changeReason: "使用较短句子，并明确每个步骤的先后顺序。",
       reviewStatus: "approved",
       comments: [],
+      approval: { basis: "蒸发、凝结、降水三个步骤顺序清楚，无术语遗漏。", approvedBy: "审核人 王老师", approvedAt: isoMinutesAgo(40) },
     },
     {
       id: "block-link",
@@ -133,6 +172,7 @@ function createSeedProject(): ChapterProject {
       changeReason: "改为说明链接目标的独立文案。",
       reviewStatus: "pending",
       comments: [],
+      approval: null,
     },
     {
       id: "block-h3",
@@ -141,8 +181,26 @@ function createSeedProject(): ChapterProject {
       text: "雨水花园怎样工作",
       accessibleText: "雨水花园怎样工作",
       changeReason: "",
-      reviewStatus: "approved",
-      comments: [],
+      reviewStatus: "pending",
+      comments: [
+        {
+          id: "comment-seed-resolved",
+          author: "审核专家 李老师",
+          role: "reviewer",
+          body: "H3 位于 H2 之下，层级可以，但“怎样工作”偏口语，确认是否符合教材体例。",
+          createdAt: isoMinutesAgo(30),
+          resolved: true,
+          replies: [
+            { id: "reply-seed-1", author: "当前编辑", body: "本章其余小节标题同为问句体，体例一致。", createdAt: isoMinutesAgo(25) },
+          ],
+          triggeredReturn: {
+            at: isoMinutesAgo(30),
+            fromApprover: "审核人 王老师",
+            approvalBasis: "标题层级 H3 正确，问句体例与本章一致。",
+          },
+        },
+      ],
+      approval: null,
     },
     {
       id: "block-p3",
@@ -152,6 +210,7 @@ function createSeedProject(): ChapterProject {
       changeReason: "把并列成分拆成短句，减少专业术语密度。",
       reviewStatus: "pending",
       comments: [],
+      approval: null,
     },
   ];
 
@@ -213,8 +272,71 @@ function blankBlock(type: BlockType, text: string, extra: Partial<ContentBlock> 
     changeReason: "",
     reviewStatus: "pending",
     comments: [],
+    approval: null,
     ...extra,
   };
+}
+
+const openComments = (block: ContentBlock) => block.comments.filter((comment) => !comment.resolved);
+const roleLabel = (role: CommentRole) => (role === "reviewer" ? "审核专家" : "编辑");
+
+/**
+ * 已通过内容出现未解决批注时自动退回待审核：
+ * 在批注上留痕，标明是哪条意见造成退回，以及原通过依据。
+ */
+function autoReturnFromComment(block: ContentBlock, comment: CommentItem) {
+  if (block.reviewStatus !== "approved") return false;
+  const previous = block.approval;
+  comment.triggeredReturn = {
+    at: new Date().toISOString(),
+    fromApprover: previous?.approvedBy ?? "审核人",
+    approvalBasis: previous?.basis ?? "（未记录通过依据）",
+  };
+  block.reviewStatus = "pending";
+  block.approval = null;
+  return true;
+}
+
+/** 迁移旧版本地数据，并对历史上“已通过却有未解决批注”的内容补做退回 */
+function normalizeProject(stored: ChapterProject): ChapterProject {
+  const project = structuredClone(stored);
+  if (!Array.isArray(project.blocks)) project.blocks = [];
+  if (!Array.isArray(project.glossary)) project.glossary = [];
+  if (!Array.isArray(project.versions)) project.versions = [];
+  for (const block of project.blocks) {
+    if (!Array.isArray(block.comments)) block.comments = [];
+    block.approval ??= null;
+    for (const comment of block.comments) {
+      comment.role ??= "editor";
+      if (!Array.isArray(comment.replies)) comment.replies = [];
+      comment.triggeredReturn ??= null;
+    }
+    if (block.reviewStatus === "approved" && openComments(block).length) {
+      for (const comment of openComments(block)) {
+        comment.triggeredReturn ??= {
+          at: project.updatedAt ?? new Date().toISOString(),
+          fromApprover: block.approval?.approvedBy ?? "审核人",
+          approvalBasis: block.approval?.basis ?? "（迁移的历史数据，未记录通过依据）",
+        };
+      }
+      block.reviewStatus = "pending";
+      block.approval = null;
+    }
+  }
+  for (const version of project.versions) {
+    if (!Array.isArray(version.blocks)) version.blocks = [];
+    if (!Array.isArray(version.glossary)) version.glossary = [];
+    for (const block of version.blocks) {
+      if (!Array.isArray(block.comments)) block.comments = [];
+      block.approval ??= null;
+      for (const comment of block.comments) {
+        comment.role ??= "editor";
+        if (!Array.isArray(comment.replies)) comment.replies = [];
+        comment.triggeredReturn ??= null;
+      }
+    }
+  }
+  return project;
 }
 
 function sentenceLength(text: string) {
@@ -339,6 +461,14 @@ function severityLabel(severity: Severity) {
   return "一致性提醒";
 }
 
+const APPROVER_NAME = "审核人 王老师";
+
+function defaultApprovalBasis(block: ContentBlock) {
+  return block.changeReason
+    ? `已核对改写原因“${block.changeReason}”，信息无遗漏、表达易读，同意通过。`
+    : "已逐句核对原文与无障碍表达，语义一致且符合结构要求，同意通过。";
+}
+
 function exportHtml(project: ChapterProject) {
   const body = project.blocks.map((block) => {
     if (block.type === "heading") {
@@ -390,8 +520,10 @@ function download(filename: string, content: string, type = "text/html;charset=u
 
 function loadProject(): ChapterProject {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "") as { schema: number; project: ChapterProject };
-    if (stored.schema === 1 && stored.project?.blocks?.length) return stored.project;
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "") as { schema?: number; project?: ChapterProject };
+    if ((stored.schema === 1 || stored.schema === 2) && stored.project?.blocks?.length) {
+      return normalizeProject(stored.project);
+    }
   } catch {
     // Fall back to the bundled sample.
   }
@@ -408,27 +540,42 @@ let activeIssueId = "";
 let previewMode: "normal" | "assisted" = "normal";
 let selectedVersionId = "";
 let showGlossary = false;
+let showApproveDialog = false;
+let showExportWarning = false;
+let commentRole: CommentRole = "reviewer";
+let notice: { tone: "info" | "warning" | "error"; text: string } | null = null;
 let undoStack: ChapterProject[] = [];
 let redoStack: ChapterProject[] = [];
 let saveTimer = 0;
 
 const activeBlock = () => project.blocks.find((block) => block.id === activeBlockId) ?? project.blocks[0];
 const issues = () => analyze(project);
+const totalOpenComments = () => project.blocks.reduce((sum, block) => sum + openComments(block).length, 0);
+const exportBlockers = () =>
+  project.blocks.flatMap((block) =>
+    openComments(block).map((comment) => ({
+      block,
+      comment,
+      index: project.blocks.indexOf(block) + 1,
+      excerpt: block.accessibleText || block.text || "（空内容）",
+    })),
+  );
 
 function saveSoon() {
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ schema: 1, project }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ schema: 2, project }));
   }, 320);
 }
 
-function commit(label: string, update: (draft: ChapterProject) => void, renderAfter = true) {
+function commit(label: string, update: (draft: ChapterProject) => void | { notice?: typeof notice }, renderAfter = true) {
   undoStack = [...undoStack.slice(-49), structuredClone(project)];
   redoStack = [];
   const draft = structuredClone(project);
-  update(draft);
+  const result = update(draft);
   draft.updatedAt = new Date().toISOString();
   project = draft;
+  notice = result?.notice ?? null;
   document.documentElement.dataset.lastAction = label;
   saveSoon();
   if (renderAfter) render();
@@ -440,6 +587,7 @@ function undo() {
   redoStack = [structuredClone(project), ...redoStack].slice(0, 50);
   project = previous;
   if (!project.blocks.some((block) => block.id === activeBlockId)) activeBlockId = project.blocks[0]?.id ?? "";
+  notice = null;
   saveSoon();
   render();
 }
@@ -449,6 +597,7 @@ function redo() {
   if (!next) return;
   undoStack = [...undoStack.slice(-49), structuredClone(project)];
   project = next;
+  notice = null;
   saveSoon();
   render();
 }
@@ -465,6 +614,10 @@ function render() {
   const active = activeBlock();
   const activeIssues = list.filter((issue) => issue.blockId === active.id);
   const approved = project.blocks.filter((block) => block.reviewStatus === "approved").length;
+  const openCount = totalOpenComments();
+  const activeOpen = openComments(active);
+  const activeReturns = activeOpen.filter((comment) => comment.triggeredReturn);
+  const activeResolvedReturns = active.comments.filter((comment) => comment.resolved && comment.triggeredReturn);
   const version = project.versions.find((item) => item.id === selectedVersionId) ?? project.versions[0];
 
   app.innerHTML = `
@@ -481,7 +634,7 @@ function render() {
           <sl-button size="small" variant="default" ${redoStack.length ? "" : "disabled"} data-action="redo">重做</sl-button>
           <sl-button size="small" variant="default" data-action="glossary">术语表</sl-button>
           <sl-button size="small" variant="primary" data-action="save-version">保存版本</sl-button>
-          <sl-button size="small" variant="success" data-action="export">导出无障碍 HTML</sl-button>
+          <sl-button size="small" variant="${openCount ? "warning" : "success"}" data-action="export">${openCount ? "导出被批注拦截" : "导出无障碍 HTML"}</sl-button>
         </div>
       </header>
 
@@ -492,6 +645,7 @@ function render() {
           <span class="error">${list.filter((issue) => issue.severity === "error").length} 必须修复</span>
           <span class="warning">${list.filter((issue) => issue.severity === "warning").length} 建议优化</span>
           <span class="info">${list.filter((issue) => issue.severity === "info").length} 术语提醒</span>
+          <span class="comment-pill ${openCount ? "open" : ""}">${openCount} 条未解决批注</span>
         </div>
       </div>
 
@@ -501,10 +655,12 @@ function render() {
           <div class="block-list">
             ${project.blocks.map((block, index) => {
               const blockIssues = list.filter((issue) => issue.blockId === block.id);
+              const blockOpen = openComments(block).length;
               return `<button class="block-item ${block.id === active.id ? "active" : ""}" data-action="select-block" data-block-id="${block.id}">
                 <span class="block-order">${index + 1}</span>
                 <span class="block-copy"><b>${block.type === "heading" ? `H${block.headingLevel}` : blockRole(block)}</b><span>${escapeHtml(block.accessibleText || block.text || "（空）")}</span></span>
                 <i class="status-${block.reviewStatus}" title="${statusLabel(block.reviewStatus)}"></i>
+                ${blockOpen ? `<u class="block-open-comments">${blockOpen} 条意见</u>` : ""}
                 ${blockIssues.length ? `<em>${blockIssues.length}</em>` : ""}
               </button>`;
             }).join("")}
@@ -518,10 +674,35 @@ function render() {
           <div class="editor-head">
             <div><span class="eyebrow">当前内容块</span><h1>${blockRole(active)}</h1></div>
             <div class="review-actions">
+              <span class="status-chip status-${active.reviewStatus}">${statusLabel(active.reviewStatus)}${activeOpen.length ? ` · ${activeOpen.length} 条未解决` : ""}</span>
               <sl-button size="small" variant="${active.reviewStatus === "approved" ? "success" : "default"}" data-action="approve">${active.reviewStatus === "approved" ? "✓ 已通过" : "审核通过"}</sl-button>
               <sl-button size="small" variant="${active.reviewStatus === "needs-work" ? "danger" : "default"}" data-action="needs-work">需修改</sl-button>
             </div>
           </div>
+
+          ${notice ? `<div class="notice-bar ${notice.tone}">${escapeHtml(notice.text)}</div>` : ""}
+          ${activeReturns.length ? `<div class="review-banner returned">
+            <strong>已自动退回待审核</strong>
+            <p>以下未解决批注出现在内容通过之后，审核状态已自动退回，需审核人再次确认：</p>
+            ${activeReturns.map((comment) => `<div class="return-cause">
+              <b>退回意见（${roleLabel(comment.role)} · ${new Date(comment.createdAt).toLocaleString()}）：</b>
+              <q>${escapeHtml(comment.body)}</q>
+              <small>原通过依据（${escapeHtml(comment.triggeredReturn!.fromApprover)}）：${escapeHtml(comment.triggeredReturn!.approvalBasis)}</small>
+            </div>`).join("")}
+          </div>` : ""}
+          ${!activeReturns.length && activeOpen.length ? `<div class="review-banner open">
+            <strong>${activeOpen.length} 条批注尚未解决</strong>
+            <p>批注全部解决后，仍需审核人再次点击“审核通过”才会恢复为已通过。</p>
+          </div>` : ""}
+          ${!activeOpen.length && activeResolvedReturns.length && active.reviewStatus !== "approved" ? `<div class="review-banner resolved-note">
+            <strong>${activeResolvedReturns.length} 条退回意见已解决，等待审核人再次确认</strong>
+            <p>内容不会因意见解决而自动恢复通过，请审核人核对后重新“审核通过”。</p>
+          </div>` : ""}
+          ${active.approval ? `<div class="approval-card">
+            <span class="approval-stamp">✓ 审核通过依据</span>
+            <p>${escapeHtml(active.approval.basis)}</p>
+            <small>${escapeHtml(active.approval.approvedBy)} · ${new Date(active.approval.approvedAt).toLocaleString()} · 若再出现未解决批注，内容将自动退回待审核</small>
+          </div>` : ""}
 
           ${activeIssues.length ? `<div class="active-issues">${activeIssues.map((issue) => `
             <div class="issue-card ${issue.severity}">
@@ -545,15 +726,26 @@ function render() {
           </section>
 
           <section class="edit-card">
-            <div class="section-heading"><div><span class="eyebrow">Review discussion</span><h2>批注与回复</h2></div><sl-badge variant="warning">${active.comments.length} 条</sl-badge></div>
-            <div class="comment-compose"><sl-textarea id="new-comment" rows="2" placeholder="记录改写依据、审核意见或术语讨论…"></sl-textarea><sl-button size="small" variant="primary" data-action="add-comment">添加批注</sl-button></div>
+            <div class="section-heading"><div><span class="eyebrow">Review discussion</span><h2>批注与回复</h2></div><sl-badge variant="${activeOpen.length ? "danger" : "neutral"}">${activeOpen.length} 未解决 / ${active.comments.length} 条</sl-badge></div>
+            <div class="comment-compose">
+              <sl-select id="comment-role" size="small" value="${commentRole}">
+                <sl-option value="reviewer">以审核专家身份</sl-option>
+                <sl-option value="editor">以编辑身份</sl-option>
+              </sl-select>
+              <sl-textarea id="new-comment" rows="2" placeholder="记录改写依据、审核意见或术语讨论。已通过内容新增未解决批注会自动退回待审核…"></sl-textarea>
+              <sl-button size="small" variant="primary" data-action="add-comment">添加批注</sl-button>
+            </div>
             <div class="comment-list">
               ${active.comments.length ? active.comments.map((comment) => `
-                <article class="comment ${comment.resolved ? "resolved" : ""}">
-                  <header><b>${escapeHtml(comment.author)}</b><time>${new Date(comment.createdAt).toLocaleString()}</time></header>
+                <article class="comment ${comment.resolved ? "resolved" : ""} ${comment.triggeredReturn ? "return-source" : ""}">
+                  <header><span class="comment-id"><b>${escapeHtml(comment.author)}</b><em class="role-tag ${comment.role}">${roleLabel(comment.role)}</em>${comment.resolved ? '<em class="state-tag resolved">已解决</em>' : '<em class="state-tag open">未解决</em>'}</span><time>${new Date(comment.createdAt).toLocaleString()}</time></header>
                   <p>${escapeHtml(comment.body)}</p>
+                  ${comment.triggeredReturn ? `<div class="return-trace">
+                    <b>↩ 此意见造成通过被退回</b>
+                    <span>退回于 ${new Date(comment.triggeredReturn.at).toLocaleString()}；原通过依据（${escapeHtml(comment.triggeredReturn.fromApprover)}）：${escapeHtml(comment.triggeredReturn.approvalBasis)}</span>
+                  </div>` : ""}
                   ${comment.replies.map((reply) => `<div class="reply"><b>${escapeHtml(reply.author)}</b><span>${escapeHtml(reply.body)}</span></div>`).join("")}
-                  <div class="reply-row"><sl-input size="small" id="reply-${comment.id}" placeholder="回复…"></sl-input><sl-button size="small" data-action="reply" data-comment-id="${comment.id}">回复</sl-button><sl-button size="small" variant="text" data-action="resolve-comment" data-comment-id="${comment.id}">${comment.resolved ? "重新打开" : "解决"}</sl-button></div>
+                  <div class="reply-row"><sl-input size="small" id="reply-${comment.id}" placeholder="回复…"></sl-input><sl-button size="small" data-action="reply" data-comment-id="${comment.id}">回复</sl-button><sl-button size="small" variant="${comment.resolved ? "default" : "success"}" outline data-action="resolve-comment" data-comment-id="${comment.id}">${comment.resolved ? "重新打开（将再次退回）" : "标记解决"}</sl-button></div>
                 </article>`).join("") : `<div class="empty-note">当前内容块还没有批注。</div>`}
             </div>
           </section>
@@ -573,7 +765,7 @@ function render() {
           </section>
 
           <section class="issues-panel">
-            <div class="section-heading"><div><span class="eyebrow">All checks</span><h2>全章问题</h2></div><sl-button size="small" variant="default" outline data-action="approve-all">全部通过</sl-button></div>
+            <div class="section-heading"><div><span class="eyebrow">All checks</span><h2>全章问题</h2></div><sl-button size="small" variant="default" outline data-action="approve-all">全部通过（跳过有未解决批注的内容）</sl-button></div>
             <div class="issue-list">
               ${list.length ? list.map((issue) => `<button class="${issue.id === activeIssueId ? "active" : ""} ${issue.severity}" data-action="jump-issue" data-issue-id="${issue.id}" data-block-id="${issue.blockId}"><span>${severityLabel(issue.severity)}</span><b>${escapeHtml(issue.title)}</b><small>段 ${project.blocks.findIndex((block) => block.id === issue.blockId) + 1} · ${escapeHtml(issue.suggestion)}</small></button>`).join("") : `<div class="issue-clear">✓ 全章检查通过</div>`}
             </div>
@@ -598,6 +790,26 @@ function render() {
       </div>
       <div class="term-add"><sl-input id="new-term-source" placeholder="原文术语"></sl-input><sl-input id="new-term-preferred" placeholder="统一表达"></sl-input><sl-button variant="primary" data-action="add-term">添加术语</sl-button></div>
       <sl-button slot="footer" variant="primary" data-action="close-glossary">完成</sl-button>
+    </sl-dialog>
+
+    <sl-dialog id="dialog-approve" label="确认审核通过" ${showApproveDialog ? "open" : ""} data-dialog="approve">
+      <p class="dialog-note">请再次核对“${escapeHtml(blockRole(active))}”，并留下本次通过依据。保存版本会同时记录批注状态与该依据，重新打开可恢复。</p>
+      <sl-textarea id="approval-basis" rows="4" value="${escapeHtml(active.approval?.basis ?? defaultApprovalBasis(active))}"></sl-textarea>
+      <small class="dialog-hint">审核人：${escapeHtml(APPROVER_NAME)} · 通过时间将自动记录</small>
+      <sl-button slot="footer" variant="default" data-action="cancel-approve">取消</sl-button>
+      <sl-button slot="footer" variant="success" data-action="confirm-approve">确认通过</sl-button>
+    </sl-dialog>
+
+    <sl-dialog id="dialog-export-warning" label="导出已停止：仍有未解决批注" ${showExportWarning ? "open" : ""} data-dialog="export-warning">
+      <p class="dialog-note warning-text">共有 ${exportBlockers().length} 条未解决批注，分布在 ${new Set(exportBlockers().map((item) => item.block.id)).size} 个内容块。为避免未审核意见混进最终稿，本次未生成导出文件。请先解决以下意见并由审核人再次确认通过：</p>
+      <div class="export-block-list">
+        ${exportBlockers().map(({ block, comment, index, excerpt }) => `<button class="export-block-item" data-action="jump-blocker" data-block-id="${block.id}">
+          <div class="export-block-head"><b>内容块 ${index} · ${escapeHtml(blockRole(block))}</b><span class="state-tag open">未解决</span></div>
+          <p class="export-block-excerpt">${escapeHtml(excerpt.length > 60 ? `${excerpt.slice(0, 60)}…` : excerpt)}</p>
+          <div class="export-block-comment"><em class="role-tag ${comment.role}">${roleLabel(comment.role)}</em><q>${escapeHtml(comment.body)}</q></div>
+        </button>`).join("")}
+      </div>
+      <sl-button slot="footer" variant="primary" data-action="close-export-warning">我知道了，先处理批注</sl-button>
     </sl-dialog>`;
 
   wireLiveFields();
@@ -645,7 +857,13 @@ function renderPreview() {
 function renderVersionDiff(version: VersionSnapshot, current: ContentBlock) {
   const oldBlock = version.blocks.find((block) => block.id === current.id);
   if (!oldBlock) return `<div class="empty-note">当前内容块不在该版本中。</div>`;
-  return `<div class="diff-column"><span>旧版</span><p>${escapeHtml(oldBlock.accessibleText || oldBlock.text)}</p></div><div class="diff-column current"><span>当前</span><p>${escapeHtml(current.accessibleText || current.text)}</p></div>`;
+  const oldOpen = openComments(oldBlock).length;
+  const oldMeta = `<div class="diff-meta">
+    <span class="status-chip status-${oldBlock.reviewStatus}">${statusLabel(oldBlock.reviewStatus)}</span>
+    <span class="diff-comments ${oldOpen ? "open" : ""}">批注 ${oldBlock.comments.length} 条 · 未解决 ${oldOpen} 条</span>
+  </div>
+  ${oldBlock.approval ? `<div class="diff-approval"><b>通过依据</b><p>${escapeHtml(oldBlock.approval.basis)}</p><small>${escapeHtml(oldBlock.approval.approvedBy)} · ${new Date(oldBlock.approval.approvedAt).toLocaleString()}</small></div>` : `<div class="diff-approval missing">该版本未通过审核，没有通过依据。</div>`}`;
+  return `<div class="diff-column"><span>旧版</span><p>${escapeHtml(oldBlock.accessibleText || oldBlock.text)}</p>${oldMeta}</div><div class="diff-column current"><span>当前</span><p>${escapeHtml(current.accessibleText || current.text)}</p></div>`;
 }
 
 function wireLiveFields() {
@@ -666,6 +884,7 @@ function wireLiveFields() {
         if (field === "link-href") block.linkHref = value;
         if (field === "reason") block.changeReason = value;
         block.reviewStatus = "pending";
+        block.approval = null;
       }, "编辑无障碍文本", false);
     });
     element.addEventListener("sl-change", () => render());
@@ -681,11 +900,13 @@ app.addEventListener("click", (event) => {
   if (action === "select-block") {
     activeBlockId = target.dataset.blockId ?? activeBlockId;
     activeIssueId = "";
+    notice = null;
     render();
   }
   if (action === "jump-issue") {
     activeIssueId = target.dataset.issueId ?? "";
     activeBlockId = target.dataset.blockId ?? activeBlockId;
+    notice = null;
     render();
     requestAnimationFrame(() => app.querySelector<HTMLElement>(".editor-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
@@ -699,16 +920,62 @@ app.addEventListener("click", (event) => {
       current.accessibleText = suggestion;
       current.changeReason ||= "拆分长句并替换复杂表达，保留原有知识信息。";
       current.reviewStatus = "pending";
+      current.approval = null;
     }, "生成易读版本");
   }
-  if (action === "approve") updateActiveBlock((block) => { block.reviewStatus = "approved"; }, "审核通过");
-  if (action === "needs-work") updateActiveBlock((block) => { block.reviewStatus = "needs-work"; }, "标记需修改");
+  if (action === "approve") {
+    const block = activeBlock();
+    const open = openComments(block);
+    if (open.length) {
+      notice = { tone: "error", text: `还有 ${open.length} 条未解决批注，不能审核通过。请先解决批注，再由审核人确认。` };
+      render();
+      return;
+    }
+    showApproveDialog = true;
+    render();
+  }
+  if (action === "cancel-approve") { showApproveDialog = false; render(); }
+  if (action === "confirm-approve") {
+    const basis = app.querySelector<HTMLElement & { value: string }>("#approval-basis")?.value.trim() || defaultApprovalBasis(activeBlock());
+    showApproveDialog = false;
+    updateActiveBlock((block) => {
+      block.reviewStatus = "approved";
+      block.approval = { basis, approvedBy: APPROVER_NAME, approvedAt: new Date().toISOString() };
+    }, "审核通过");
+    notice = { tone: "info", text: "已记录通过依据并标记为已通过。" };
+    render();
+  }
+  if (action === "needs-work") updateActiveBlock((block) => {
+    block.reviewStatus = "needs-work";
+    block.approval = null;
+  }, "标记需修改");
   if (action === "add-comment") {
     const input = app.querySelector<HTMLElement & { value: string }>("#new-comment");
     const body = input?.value.trim();
-    if (body) updateActiveBlock((block) => {
-      block.comments.unshift({ id: uid("comment"), author: "当前编辑", body, createdAt: new Date().toISOString(), resolved: false, replies: [] });
-    }, "添加批注");
+    if (body) {
+      const role: CommentRole = commentRole;
+      updateActiveBlock((block) => {
+        const comment: CommentItem = {
+          id: uid("comment"),
+          author: role === "reviewer" ? "审核专家 李老师" : "当前编辑",
+          role,
+          body,
+          createdAt: new Date().toISOString(),
+          resolved: false,
+          replies: [],
+          triggeredReturn: null,
+        };
+        block.comments.unshift(comment);
+        const returned = autoReturnFromComment(block, comment);
+        if (returned) {
+          notice = {
+            tone: "warning",
+            text: `该内容原为“已通过”，因新批注“${body.length > 30 ? `${body.slice(0, 30)}…` : body}”未解决，已自动退回待审核；解决后仍需审核人再次确认。`,
+          };
+        }
+      }, "添加批注");
+      if (notice) render();
+    }
   }
   if (action === "reply") {
     const commentId = target.dataset.commentId ?? "";
@@ -722,8 +989,20 @@ app.addEventListener("click", (event) => {
     const commentId = target.dataset.commentId ?? "";
     updateActiveBlock((block) => {
       const comment = block.comments.find((item) => item.id === commentId);
-      if (comment) comment.resolved = !comment.resolved;
+      if (!comment) return;
+      if (comment.resolved) {
+        // 重新打开一条旧意见：若内容当前已通过，需再次退回
+        comment.resolved = false;
+        const returned = autoReturnFromComment(block, comment);
+        notice = returned
+          ? { tone: "warning", text: `批注“${comment.body.length > 30 ? `${comment.body.slice(0, 30)}…` : comment.body}”被重新打开，内容已再次自动退回待审核。` }
+          : { tone: "info", text: "批注已重新打开，状态保持待审核。" };
+      } else {
+        comment.resolved = true;
+        notice = { tone: "info", text: "批注已标记解决，但内容仍为待审核，请由审核人核对后再次确认通过。" };
+      }
     }, "更新批注状态");
+    if (notice) render();
   }
   if (action === "preview-normal") { previewMode = "normal"; render(); }
   if (action === "preview-assisted") { previewMode = "assisted"; render(); }
@@ -750,12 +1029,47 @@ app.addEventListener("click", (event) => {
     render();
   }
   if (action === "approve-all") {
-    commit("全部审核通过", (draft) => { draft.blocks.forEach((block) => { block.reviewStatus = "approved"; }); });
+    commit("全部审核通过", (draft) => {
+      let skipped = 0;
+      draft.blocks.forEach((block) => {
+        if (openComments(block).length) {
+          skipped += 1;
+          return;
+        }
+        block.reviewStatus = "approved";
+        block.approval ??= {
+          basis: "批量通过：已复核无障碍检查项且该内容块没有未解决批注。",
+          approvedBy: APPROVER_NAME,
+          approvedAt: new Date().toISOString(),
+        };
+      });
+      return {
+        notice: skipped
+          ? { tone: "warning" as const, text: `已通过其余内容；${skipped} 个内容块因仍有未解决批注被跳过，需先处理意见。` }
+          : { tone: "info" as const, text: "全部内容块均已审核通过。" },
+      };
+    });
   }
   if (action === "export") {
+    const blockers = exportBlockers();
+    if (blockers.length) {
+      showExportWarning = true;
+      document.documentElement.dataset.lastAction = "导出被未解决批注拦截";
+      render();
+      return;
+    }
     download(`${project.title}-无障碍版.html`, exportHtml(project));
     document.documentElement.dataset.lastAction = "已导出无障碍 HTML";
     render();
+  }
+  if (action === "close-export-warning") { showExportWarning = false; render(); }
+  if (action === "jump-blocker") {
+    activeBlockId = target.dataset.blockId ?? activeBlockId;
+    activeIssueId = "";
+    showExportWarning = false;
+    notice = null;
+    render();
+    requestAnimationFrame(() => app.querySelector<HTMLElement>(".editor-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
   if (action === "import") app.querySelector<HTMLInputElement>("#chapter-file")?.click();
 });
@@ -763,9 +1077,13 @@ app.addEventListener("click", (event) => {
 app.addEventListener("sl-change", (event) => {
   const element = event.target as HTMLElement;
   if (element.id === "chapter-file") return;
+  if (element.id === "comment-role") {
+    commentRole = (element as HTMLElement & { value: string }).value as CommentRole;
+    return;
+  }
   if (element.id.startsWith("heading-level-")) {
     const level = Number((element as HTMLElement & { value: string }).value);
-    updateActiveBlock((block) => { block.headingLevel = level; block.reviewStatus = "pending"; }, "修改标题层级");
+    updateActiveBlock((block) => { block.headingLevel = level; block.reviewStatus = "pending"; block.approval = null; }, "修改标题层级");
   }
   if (element.id === "version-select") {
     selectedVersionId = (element as HTMLElement & { value: string }).value;
@@ -776,6 +1094,14 @@ app.addEventListener("sl-change", (event) => {
     const value = (element as HTMLElement & { value: string }).value;
     commit("修改术语表", (draft) => { const term = draft.glossary.find((item) => item.id === termId); if (term) term.preferred = value; });
   }
+});
+
+app.addEventListener("sl-request-close", (event) => {
+  const dialog = (event.target as HTMLElement).dataset.dialog;
+  if (dialog === "glossary") showGlossary = false;
+  if (dialog === "approve") showApproveDialog = false;
+  if (dialog === "export-warning") showExportWarning = false;
+  render();
 });
 
 app.addEventListener("change", (event) => {

@@ -101,7 +101,7 @@ sl-textarea::part(textarea) { line-height: 1.65; }
 .image-source b { display: block; margin-bottom: 3px; color: #5b6862; font-size: 9px; text-transform: uppercase; }
 .image-source p { margin: 0 0 7px; color: #30413b; font-size: 11px; }
 .field-label { display: block; color: #5f6e68; font-size: 10px; font-weight: 700; margin: 8px 0 5px; }
-.comment-compose { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.comment-compose { display: grid; grid-template-columns: 170px 1fr auto; gap: 8px; align-items: end; }
 .comment-compose sl-button { margin-bottom: 9px; }
 .comment-list { display: grid; gap: 8px; }
 .comment { border: 1px solid #dde2df; border-left: 3px solid #d59028; border-radius: 8px; padding: 9px; background: #fff; }
@@ -170,3 +170,71 @@ sl-textarea::part(textarea) { line-height: 1.65; }
   .workspace { grid-template-columns: 245px minmax(520px, 1fr) 370px; }
   .online-pill { display: none; }
 }
+
+/* ---- 批注与审核状态联动 ---- */
+.status-chip { display: inline-block; border-radius: 99px; padding: 5px 11px; font-size: 10px; font-weight: 750; white-space: nowrap; }
+.status-chip.status-approved { color: #1f6e4c; background: #e2f3ea; border: 1px solid #9fcbb3; }
+.status-chip.status-needs-work { color: #98261f; background: #fbe9e7; border: 1px solid #e8b8b3; }
+.status-chip.status-pending { color: #8a5209; background: #fff0d8; border: 1px solid #e7c488; }
+.issue-counts .comment-pill { color: #54625c; background: #eef2ef; }
+.issue-counts .comment-pill.open { color: #98261f; background: #fbe9e7; }
+
+.notice-bar { border-radius: 9px; padding: 10px 13px; margin-bottom: 10px; font-size: 11px; line-height: 1.55; border: 1px solid #d6e6f1; background: #f2f8fd; color: #24608b; }
+.notice-bar.warning { border-color: #ecd3a4; background: #fff7e6; color: #8a5209; }
+.notice-bar.error { border-color: #ecc3bf; background: #fdf1f0; color: #98261f; }
+
+.review-banner { border-radius: 10px; padding: 11px 13px; margin-bottom: 12px; border: 1px solid; }
+.review-banner strong { font-size: 12px; }
+.review-banner p { margin: 4px 0 0; font-size: 11px; line-height: 1.55; }
+.review-banner.returned { border-color: #e3a19a; border-left: 4px solid var(--red); background: #fdf2f1; color: #7f241e; }
+.review-banner.returned > p { color: #9b4a43; }
+.review-banner.open { border-color: #e7c488; border-left: 4px solid var(--amber); background: #fff8eb; color: #7d4d0b; }
+.review-banner.open p { color: #9a6a1e; }
+.review-banner.resolved-note { border-color: #b7d6c5; border-left: 4px solid var(--green); background: #f1f9f5; color: #1f5c42; }
+.review-banner.resolved-note p { color: #3d775e; }
+.return-cause { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.75); border: 1px solid #f0cfcb; display: grid; gap: 3px; }
+.return-cause b { font-size: 10px; color: #8d2b24; }
+.return-cause q { font-size: 11px; color: #5b231f; quotes: "“" "”"; }
+.return-cause small { font-size: 10px; color: #8a6a65; }
+
+.approval-card { border: 1px solid #b9d8c7; border-left: 4px solid var(--green); border-radius: 10px; background: #f2faf6; padding: 11px 13px; margin-bottom: 12px; }
+.approval-stamp { display: inline-block; color: #fff; background: var(--green); border-radius: 6px; padding: 3px 8px; font-size: 9px; font-weight: 800; letter-spacing: .06em; }
+.approval-card p { margin: 7px 0 4px; font-size: 11px; line-height: 1.6; color: #27503f; }
+.approval-card small { font-size: 10px; color: #5b8a73; }
+
+.block-open-comments { position: absolute; top: 4px; right: 6px; font-style: normal; font-size: 8px; font-weight: 800; color: #fff; background: #c44b40; border-radius: 99px; padding: 2px 6px; }
+
+.comment.return-source { border-left-color: var(--red); background: #fff9f8; }
+.comment header { align-items: center; }
+.comment-id { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.role-tag { font-style: normal; border-radius: 99px; padding: 1px 7px; font-size: 8px; font-weight: 800; }
+.role-tag.reviewer { color: #98261f; background: #fbe2df; }
+.role-tag.editor { color: #1f5e8b; background: #e3eff7; }
+.state-tag { font-style: normal; border-radius: 99px; padding: 1px 7px; font-size: 8px; font-weight: 800; }
+.state-tag.open { color: #fff; background: #c44b40; }
+.state-tag.resolved { color: #2c7255; background: #e2f3ea; }
+.return-trace { display: grid; gap: 3px; margin: 6px 0; padding: 7px 9px; border-radius: 7px; border: 1px dashed #e3a19a; background: #fdf1f0; }
+.return-trace b { font-size: 10px; color: #8d2b24; }
+.return-trace span { font-size: 10px; line-height: 1.5; color: #8a5f5a; }
+
+.dialog-note { font-size: 12px; line-height: 1.65; color: #48564f; margin: 0 0 12px; }
+.dialog-note.warning-text { color: #7f241e; }
+.dialog-hint { display: block; color: #78837e; font-size: 10px; margin-top: 6px; }
+.export-block-list { display: grid; gap: 8px; max-height: 46vh; overflow-y: auto; }
+.export-block-item { text-align: left; border: 1px solid #ecc3bf; border-left: 3px solid var(--red); border-radius: 8px; background: #fff9f8; padding: 10px 12px; cursor: pointer; }
+.export-block-item:hover { background: #fdf1f0; }
+.export-block-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.export-block-head b { font-size: 11px; color: #7f241e; }
+.export-block-excerpt { margin: 5px 0; font-size: 10px; color: #6d625f; line-height: 1.5; }
+.export-block-comment { display: flex; gap: 6px; align-items: baseline; background: #fff; border-radius: 6px; padding: 6px 8px; }
+.export-block-comment q { font-size: 10px; line-height: 1.5; color: #5b231f; quotes: "“" "”"; }
+
+.diff-meta { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 7px; }
+.diff-meta .status-chip { padding: 2px 8px; font-size: 8px; }
+.diff-comments { font-size: 8px; color: #8b6720; }
+.diff-comments.open { color: #98261f; font-weight: 750; }
+.diff-approval { margin-top: 6px; border-top: 1px dashed #e2d5bd; padding-top: 6px; }
+.diff-approval b { font-size: 8px; color: #2c7255; letter-spacing: .08em; }
+.diff-approval p { font-size: 9px; color: #4d6b5c; }
+.diff-approval small { font-size: 8px; color: #7b8580; }
+.diff-approval.missing { font-size: 9px; color: #9a6a1e; }
